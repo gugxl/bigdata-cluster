@@ -1,0 +1,137 @@
+version: '3.8'
+services:
+
+  namenode:
+    image: bigdata-base:latest
+    container_name: namenode
+    hostname: namenode
+    ports:
+      - "9870:9870"
+    volumes:
+      - hdfs_namenode:/hadoop/dfs/name
+      - ./config/hadoop:/opt/hadoop/etc/hadoop
+      - ./scripts:/scripts
+    command: bash -c "/scripts/format-namenode.sh && /opt/hadoop/sbin/start-dfs.sh && tail -f /dev/null"
+
+  datanode:
+    image: bigdata-base:latest
+    container_name: datanode
+    hostname: datanode
+    depends_on:
+      - namenode
+    ports:
+      - "9864:9864"
+    volumes:
+      - hdfs_datanode:/hadoop/dfs/data
+      - ./config/hadoop:/opt/hadoop/etc/hadoop
+      - ./scripts:/scripts
+    command: bash -c "/scripts/wait-for.sh namenode:9000 30 && /opt/hadoop/sbin/hadoop-daemon.sh start datanode && tail -f /dev/null"
+
+  resourcemanager:
+    image: bigdata-base:latest
+    container_name: resourcemanager
+    hostname: resourcemanager
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./config/hadoop:/opt/hadoop/etc/hadoop
+      - ./scripts:/scripts
+    command: bash -c "/scripts/wait-for.sh namenode:9000 30 && /opt/hadoop/sbin/start-yarn.sh && tail -f /dev/null"
+
+  nodemanager:
+    image: bigdata-base:latest
+    container_name: nodemanager
+    hostname: nodemanager
+    depends_on:
+      - resourcemanager
+    volumes:
+      - ./config/hadoop:/opt/hadoop/etc/hadoop
+      - ./scripts:/scripts
+    command: bash -c "/scripts/wait-for.sh resourcemanager:8088 30 && /opt/hadoop/sbin/yarn-daemon.sh start nodemanager && tail -f /dev/null"
+
+  hive-metastore:
+    image: bigdata-hive-metastore:latest
+    container_name: hive-metastore
+    hostname: hive-metastore
+    depends_on:
+      - postgres
+      - namenode
+    environment:
+      INIT_SCHEMA: \"true\"
+    volumes:
+      - ./config/hive:/opt/hive/conf
+      - ./scripts:/scripts
+    command: bash -c \"/scripts/wait-for.sh postgres:5432 30 && /scripts/wait-for.sh namenode:9000 30 && /entrypoint.sh\"
+
+  hive-server2:
+    image: bigdata-hive-server2:latest
+    container_name: hive-server2
+    hostname: hive-server2
+    depends_on:
+      - hive-metastore
+    ports:
+      - \"10000:10000\"
+    volumes:
+      - ./config/hive:/opt/hive/conf
+      - ./scripts:/scripts
+    command: bash -c \"/scripts/wait-for.sh hive-metastore:9083 30 && /entrypoint.sh\"
+
+  spark-client:
+    image: bigdata-spark:latest
+    container_name: spark-client
+    hostname: spark-client
+    depends_on:
+      - resourcemanager
+      - hive-server2
+    ports:
+      - \"4040:4040\"
+    volumes:
+      - ./config/spark:/opt/spark/conf
+      - ./scripts:/scripts
+    command: bash -c \"/scripts/wait-for.sh resourcemanager:8088 30 && /scripts/wait-for.sh hive-server2:10000 30 && /entrypoint.sh\"
+
+  hbase-master:
+    image: bigdata-hbase-master:latest
+    container_name: hbase-master
+    hostname: hbase-master
+    depends_on:
+      - zookeeper
+      - namenode
+    volumes:
+      - ./config/hbase:/opt/hbase/conf
+      - ./scripts:/scripts
+    command: bash -c \"/scripts/wait-for.sh zookeeper:2181 30 && /scripts/wait-for.sh namenode:9000 30 && /entrypoint.sh\"
+
+  hbase-regionserver:
+    image: bigdata-hbase-region:latest
+    container_name: hbase-regionserver
+    hostname: hbase-regionserver
+    depends_on:
+      - hbase-master
+    volumes:
+      - ./config/hbase:/opt/hbase/conf
+      - ./scripts:/scripts
+    command: bash -c \"/scripts/wait-for.sh hbase-master:16010 30 && /entrypoint.sh\"
+
+  zookeeper:
+    image: zookeeper:3.7
+    container_name: zookeeper
+    ports:
+      - \"2181:2181\"
+
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      POSTGRES_DB: metastore
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+    ports:
+      - \"5432:5432\"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  hdfs_namenode:
+  hdfs_datanode:
+  pgdata:
