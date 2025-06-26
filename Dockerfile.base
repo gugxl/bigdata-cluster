@@ -1,4 +1,8 @@
+# syntax=docker/dockerfile:1.4
 FROM ubuntu:20.04
+
+# 切换到国内镜像，加速 apt
+RUN sed -i 's|archive.ubuntu.com|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list
 
 ENV DEBIAN_FRONTEND=noninteractive \
     JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 \
@@ -8,43 +12,71 @@ ENV DEBIAN_FRONTEND=noninteractive \
     HBASE_HOME=/opt/hbase \
     PATH=$PATH:$HADOOP_HOME/bin:$HADOOP_HOME/sbin:$HIVE_HOME/bin:$SPARK_HOME/bin:$HBASE_HOME/bin
 
-RUN apt-get update && apt-get install -y \
-    openjdk-8-jdk wget curl net-tools lsof procps ssh rsync vim gnupg software-properties-common \
-    && apt-get clean
+# 缓存 apt 包，加快重构建速度
+RUN --mount=type=cache,target=/var/cache/apt \
+    --mount=type=cache,target=/var/lib/apt \
+    apt-get update && \
+    apt-get install -y \
+      openjdk-8-jdk wget curl net-tools lsof procps ssh rsync vim gnupg software-properties-common && \
+    rm -rf /var/lib/apt/lists/*
 
-# Hadoop
-RUN if [ -f ./resources/hadoop-3.3.3.tar.gz ]; then \
-      cp ./resources/hadoop-3.3.3.tar.gz /tmp/ ; \
+# 把本地资源目录拷贝到镜像中
+COPY resources /resources
+
+# Hadoop 安装（优先使用镜像里的 /resources 文件，否则网络下载）
+RUN if [ -f /resources/hadoop-3.3.3.tar.gz ]; then \
+      echo "Using local Hadoop archive" && \
+      cp /resources/hadoop-3.3.3.tar.gz /tmp/ ; \
     else \
-      wget -O /tmp/hadoop-3.3.3.tar.gz https://archive.apache.org/dist/hadoop/common/hadoop-3.3.3/hadoop-3.3.3.tar.gz ; \
+      echo "Downloading Hadoop archive" && \
+      wget -O /tmp/hadoop-3.3.3.tar.gz \
+        https://archive.apache.org/dist/hadoop/common/hadoop-3.3.3/hadoop-3.3.3.tar.gz ; \
     fi && \
-    tar -xzf /tmp/hadoop-3.3.3.tar.gz -C /opt && mv /opt/hadoop-3.3.3 /opt/hadoop && rm /tmp/hadoop-3.3.3.tar.gz
+    tar -xzf /tmp/hadoop-3.3.3.tar.gz -C /opt && \
+    mv /opt/hadoop-3.3.3 /opt/hadoop && \
+    rm /tmp/hadoop-3.3.3.tar.gz
 
-# Hive
-RUN if [ -f ./resources/apache-hive-3.1.3-bin.tar.gz ]; then \
-      cp ./resources/apache-hive-3.1.3-bin.tar.gz /tmp/ ; \
+# Hive 安装
+RUN if [ -f /resources/apache-hive-3.1.3-bin.tar.gz ]; then \
+      echo "Using local Hive archive" && \
+      cp /resources/apache-hive-3.1.3-bin.tar.gz /tmp/ ; \
     else \
-      wget -O /tmp/apache-hive-3.1.3-bin.tar.gz https://archive.apache.org/dist/hive/hive-3.1.3/apache-hive-3.1.3-bin.tar.gz ; \
+      echo "Downloading Hive archive" && \
+      wget -O /tmp/apache-hive-3.1.3-bin.tar.gz \
+        https://archive.apache.org/dist/hive/hive-3.1.3/apache-hive-3.1.3-bin.tar.gz ; \
     fi && \
-    tar -xzf /tmp/apache-hive-3.1.3-bin.tar.gz -C /opt && mv /opt/apache-hive-3.1.3-bin /opt/hive && rm /tmp/apache-hive-3.1.3-bin.tar.gz
+    tar -xzf /tmp/apache-hive-3.1.3-bin.tar.gz -C /opt && \
+    mv /opt/apache-hive-3.1.3-bin /opt/hive && \
+    rm /tmp/apache-hive-3.1.3-bin.tar.gz
 
-# Spark
-RUN if [ -f ./resources/spark-3.3.1-bin-hadoop3.tgz ]; then \
-      cp ./resources/spark-3.3.1-bin-hadoop3.tgz /tmp/ ; \
+# Spark 安装
+RUN if [ -f /resources/spark-3.3.1-bin-hadoop3.tgz ]; then \
+      echo "Using local Spark archive" && \
+      cp /resources/spark-3.3.1-bin-hadoop3.tgz /tmp/ ; \
     else \
-      wget -O /tmp/spark-3.3.1-bin-hadoop3.tgz https://archive.apache.org/dist/spark/spark-3.3.1/spark-3.3.1-bin-hadoop3.tgz ; \
+      echo "Downloading Spark archive" && \
+      wget -O /tmp/spark-3.3.1-bin-hadoop3.tgz \
+        https://archive.apache.org/dist/spark/spark-3.3.1/spark-3.3.1-bin-hadoop3.tgz ; \
     fi && \
-    tar -xzf /tmp/spark-3.3.1-bin-hadoop3.tgz -C /opt && mv /opt/spark-3.3.1-bin-hadoop3 /opt/spark && rm /tmp/spark-3.3.1-bin-hadoop3.tgz
+    tar -xzf /tmp/spark-3.3.1-bin-hadoop3.tgz -C /opt && \
+    mv /opt/spark-3.3.1-bin-hadoop3 /opt/spark && \
+    rm /tmp/spark-3.3.1-bin-hadoop3.tgz
 
-# HBase
-RUN if [ -f ./resources/hbase-2.4.17-bin.tar.gz ]; then \
-      cp ./resources/hbase-2.4.17-bin.tar.gz /tmp/ ; \
+# HBase 安装
+RUN if [ -f /resources/hbase-2.4.17-bin.tar.gz ]; then \
+      echo "Using local HBase archive" && \
+      cp /resources/hbase-2.4.17-bin.tar.gz /tmp/ ; \
     else \
-      wget -O /tmp/hbase-2.4.17-bin.tar.gz https://archive.apache.org/dist/hbase/2.4.17/hbase-2.4.17-bin.tar.gz ; \
+      echo "Downloading HBase archive" && \
+      wget -O /tmp/hbase-2.4.17-bin.tar.gz \
+        https://archive.apache.org/dist/hbase/2.4.17/hbase-2.4.17-bin.tar.gz ; \
     fi && \
-    tar -xzf /tmp/hbase-2.4.17-bin.tar.gz -C /opt && mv /opt/hbase-2.4.17 /opt/hbase && rm /tmp/hbase-2.4.17-bin.tar.gz
+    tar -xzf /tmp/hbase-2.4.17-bin.tar.gz -C /opt && \
+    mv /opt/hbase-2.4.17 /opt/hbase && \
+    rm /tmp/hbase-2.4.17-bin.tar.gz
 
-# SSH
-RUN ssh-keygen -A && echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config
+# 配置 SSH 无交互
+RUN ssh-keygen -A && \
+    echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config
 
 CMD ["/bin/bash"]

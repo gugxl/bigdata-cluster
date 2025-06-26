@@ -28,16 +28,16 @@ bigdata-cluster/
 
 1. **Build base image**
    ```bash
-   docker build -t bigdata-base:latest -f Dockerfile.base .
-   ```
+DOCKER_BUILDKIT=1 docker build -t bigdata-base:latest -f Dockerfile.base .
+      ```
 
 2. **Build service images**
    ```bash
-   docker build -t bigdata-hive-metastore:latest ./images/hive-metastore
-   docker build -t bigdata-hive-server2:latest ./images/hive-server2
-   docker build -t bigdata-spark:latest ./images/spark-client
-   docker build -t bigdata-hbase-master:latest ./images/hbase-master
-   docker build -t bigdata-hbase-region:latest ./images/hbase-regionserver
+   DOCKER_BUILDKIT=1 docker build -t bigdata-hive-metastore:latest ./images/hive-metastore
+   DOCKER_BUILDKIT=1 docker build -t bigdata-hive-server2:latest ./images/hive-server2
+   DOCKER_BUILDKIT=1 docker build -t bigdata-spark:latest ./images/spark-client
+   DOCKER_BUILDKIT=1 docker build -t bigdata-hbase-master:latest ./images/hbase-master
+   DOCKER_BUILDKIT=1 docker build -t bigdata-hbase-region:latest ./images/hbase-regionserver
    ```
 
 3. **Start the cluster**
